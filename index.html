@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Change Order Risk Calculator — Vela</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --ink: #0d0d0d; --paper: #f5f0e8; --cream: #ede8dc;
+    --gold: #c9a84c; --gold-light: #e8c97a; --red: #c0392b;
+    --red-light: #e74c3c; --muted: #7a7060; --border: #d0c8b8;
+  }
+  html { font-size: 16px; }
+  body { background: var(--paper); color: var(--ink); font-family: 'DM Mono', monospace; min-height: 100vh; overflow-x: hidden; }
+  body::before { content: ''; position: fixed; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E"); pointer-events: none; z-index: 100; opacity: 0.4; }
+  .page { max-width: 680px; margin: 0 auto; padding: 48px 24px 80px; }
+  .header { border-bottom: 2px solid var(--ink); padding-bottom: 24px; margin-bottom: 48px; opacity: 0; animation: fadeUp 0.6s ease forwards; }
+  .logo { font-family: 'Playfair Display', serif; font-size: 13px; font-weight: 400; letter-spacing: 0.35em; text-transform: uppercase; color: var(--muted); margin-bottom: 20px; }
+  .logo span { color: var(--gold); }
+  h1 { font-family: 'Playfair Display', serif; font-size: clamp(28px, 6vw, 46px); font-weight: 900; line-height: 1.1; letter-spacing: -0.02em; }
+  h1 em { font-style: italic; color: var(--red); }
+  .subhead { margin-top: 16px; font-size: 12px; line-height: 1.8; color: var(--muted); letter-spacing: 0.04em; max-width: 480px; }
+  .form-section { opacity: 0; animation: fadeUp 0.6s ease 0.15s forwards; }
+  .field-group { margin-bottom: 32px; }
+  .field-label { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .field-label label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 500; }
+  .field-label .hint { font-size: 10px; color: var(--muted); letter-spacing: 0.04em; }
+  .input-row { display: flex; align-items: center; gap: 16px; }
+  input[type="range"] { -webkit-appearance: none; appearance: none; flex: 1; height: 2px; background: var(--border); outline: none; cursor: pointer; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; background: var(--ink); border-radius: 50%; cursor: pointer; transition: transform 0.15s ease, background 0.15s ease; border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--ink); }
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); background: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
+  .value-display { font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; min-width: 80px; text-align: right; }
+  .divider { height: 1px; background: var(--border); margin: 40px 0; }
+  .result-card { background: var(--ink); color: var(--paper); padding: 36px; position: relative; overflow: hidden; opacity: 0; animation: fadeUp 0.6s ease 0.3s forwards; }
+  .result-card::before { content: ''; position: absolute; top: -40px; right: -40px; width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(circle, rgba(201,168,76,0.15) 0%, transparent 70%); }
+  .result-label { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); margin-bottom: 12px; }
+  .result-amount { font-family: 'Playfair Display', serif; font-size: clamp(40px, 10vw, 72px); font-weight: 900; line-height: 1; color: #fff; transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .result-amount.danger { color: var(--red-light); }
+  .result-sub { margin-top: 12px; font-size: 11px; color: rgba(245,240,232,0.5); letter-spacing: 0.06em; line-height: 1.7; }
+  .breakdown { margin-top: 28px; padding-top: 28px; border-top: 1px solid rgba(255,255,255,0.1); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  .b-label { font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(245,240,232,0.4); margin-bottom: 6px; }
+  .b-value { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: var(--gold-light); }
+  .risk-row { margin-top: 28px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.1); }
+  .risk-label-row { display: flex; justify-content: space-between; margin-bottom: 10px; }
+  .risk-label-row span { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(245,240,232,0.4); }
+  .risk-label-row .risk-level { color: var(--gold); font-weight: 500; }
+  .risk-bar-bg { height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+  .risk-bar-fill { height: 100%; background: linear-gradient(90deg, #c9a84c, #e74c3c); border-radius: 2px; transition: width 0.6s cubic-bezier(0.34, 1.2, 0.64, 1); width: 0%; }
+  .cta-section { margin-top: 40px; opacity: 0; animation: fadeUp 0.6s ease 0.45s forwards; }
+  .cta-headline { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+  .cta-body { font-size: 11px; line-height: 1.9; color: var(--muted); letter-spacing: 0.03em; margin-bottom: 24px; max-width: 520px; }
+  .cta-btn { display: inline-block; background: var(--ink); color: var(--paper); font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; padding: 16px 32px; text-decoration: none; border: none; cursor: pointer; transition: background 0.2s ease; position: relative; overflow: hidden; }
+  .cta-btn::after { content: ''; position: absolute; inset: 0; background: var(--gold); transform: translateX(-100%); transition: transform 0.3s ease; z-index: 0; }
+  .cta-btn:hover::after { transform: translateX(0); }
+  .cta-btn span { position: relative; z-index: 1; }
+  .cta-btn:hover { color: var(--ink); }
+  .footnote { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 10px; color: var(--muted); letter-spacing: 0.06em; line-height: 1.8; opacity: 0; animation: fadeUp 0.6s ease 0.6s forwards; }
+  @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.04); } 100% { transform: scale(1); } }
+  .pulse { animation: pulse 0.35s ease; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+  @media (max-width: 480px) { .breakdown { grid-template-columns: 1fr 1fr; } .result-card { padding: 24px; } .page { padding: 32px 20px 60px; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="header">
+    <div class="logo">Vela <span>///</span> Field Intelligence</div>
+    <h1>How much are change orders <em>actually</em> costing you?</h1>
+    <p class="subhead">Move the sliders below. We'll calculate your annual rework exposure in under 30 seconds — based on real industry averages for custom millwork & luxury builds.</p>
+  </header>
+  <div class="form-section">
+    <div class="field-group">
+      <div class="field-label">
+        <label>Active jobs at any time</label>
+        <span class="hint">simultaneous projects</span>
+      </div>
+      <div class="input-row">
+        <input type="range" id="jobs" min="1" max="20" value="5" step="1" oninput="update()">
+        <div class="value-display" id="jobs-val">5</div>
+      </div>
+    </div>
+    <div class="field-group">
+      <div class="field-label">
+        <label>Average job value</label>
+        <span class="hint">per project ($)</span>
+      </div>
+      <div class="input-row">
+        <input type="range" id="jobval" min="20000" max="500000" value="120000" step="5000" oninput="update()">
+        <div class="value-display" id="jobval-val">$120k</div>
+      </div>
+    </div>
+    <div class="field-group">
+      <div class="field-label">
+        <label>Change orders per job</label>
+        <span class="hint">average count</span>
+      </div>
+      <div class="input-row">
+        <input type="range" id="orders" min="1" max="15" value="4" step="1" oninput="update()">
+        <div class="value-display" id="orders-val">4</div>
+      </div>
+    </div>
+    <div class="field-group">
+      <div class="field-label">
+        <label>Disputes that cause rework</label>
+        <span class="hint">% of change orders</span>
+      </div>
+      <div class="input-row">
+        <input type="range" id="dispute" min="5" max="60" value="20" step="5" oninput="update()">
+        <div class="value-display" id="dispute-val">20%</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="result-card">
+      <div class="result-label">/// Your estimated annual rework exposure</div>
+      <div class="result-amount" id="result">$0</div>
+      <div class="result-sub" id="result-sub">Calculating...</div>
+      <div class="breakdown">
+        <div class="breakdown-item">
+          <div class="b-label">Per dispute</div>
+          <div class="b-value" id="per-dispute">—</div>
+        </div>
+        <div class="breakdown-item">
+          <div class="b-label">Disputes / yr</div>
+          <div class="b-value" id="disputes-yr">—</div>
+        </div>
+        <div class="breakdown-item">
+          <div class="b-label">Jobs / yr</div>
+          <div class="b-value" id="jobs-yr">—</div>
+        </div>
+      </div>
+      <div class="risk-row">
+        <div class="risk-label-row">
+          <span>Risk exposure</span>
+          <span class="risk-level" id="risk-level">Calculating...</span>
+        </div>
+        <div class="risk-bar-bg">
+          <div class="risk-bar-fill" id="risk-bar"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cta-section">
+    <h2 class="cta-headline">This number doesn't have to exist.</h2>
+    <p class="cta-body">Vela is a field-side AI assistant that turns verbal site instructions into timestamped, signed change-order documents — instantly. Every deviation is logged. Every client approval is recorded. No more he-said-she-said rework bills.<br><br>We're currently onboarding a small number of custom millwork and luxury build studios. The first month is on us.</p>
+    <a href="https://instagram.com" class="cta-btn" target="_blank"><span>→ See how Vela works</span></a>
+  </div>
+  <p class="footnote">Exposure estimate based on industry averages: rework cost = 8–12% of job value per dispute event. Figures are illustrative and will vary by shop. Vela is a documentation and workflow tool — not a substitute for licensed engineering or legal counsel. &nbsp;///&nbsp; © 2025 Vela Field Intelligence.</p>
+</div>
+<script>
+  function fmt(n) {
+    if (n >= 1000000) return '$' + (n/1000000).toFixed(1) + 'M';
+    if (n >= 1000) return '$' + Math.round(n/1000) + 'k';
+    return '$' + n;
+  }
+  function update() {
+    const jobs = +document.getElementById('jobs').value;
+    const jobval = +document.getElementById('jobval').value;
+    const orders = +document.getElementById('orders').value;
+    const dispute = +document.getElementById('dispute').value;
+    document.getElementById('jobs-val').textContent = jobs;
+    document.getElementById('jobval-val').textContent = fmt(jobval);
+    document.getElementById('orders-val').textContent = orders;
+    document.getElementById('dispute-val').textContent = dispute + '%';
+    const jobsPerYear = Math.round(jobs * 8);
+    const totalOrders = jobsPerYear * orders;
+    const disputeCount = Math.round(totalOrders * (dispute / 100));
+    const reworkPerDispute = jobval * 0.10;
+    const totalExposure = Math.round(disputeCount * reworkPerDispute);
+    const resultEl = document.getElementById('result');
+    resultEl.classList.remove('pulse');
+    void resultEl.offsetWidth;
+    resultEl.classList.add('pulse');
+    resultEl.textContent = fmt(totalExposure);
+    if (totalExposure > 150000) { resultEl.classList.add('danger'); } else { resultEl.classList.remove('danger'); }
+    document.getElementById('result-sub').textContent = `Across ~${jobsPerYear} jobs/year with ${disputeCount} disputed change orders.`;
+    document.getElementById('per-dispute').textContent = fmt(Math.round(reworkPerDispute));
+    document.getElementById('disputes-yr').textContent = disputeCount;
+    document.getElementById('jobs-yr').textContent = jobsPerYear;
+    const pct = Math.min(100, Math.round((totalExposure / 500000) * 100));
+    document.getElementById('risk-bar').style.width = pct + '%';
+    let level = 'Low Risk';
+    if (totalExposure > 300000) level = 'Critical Exposure';
+    else if (totalExposure > 150000) level = 'High Risk';
+    else if (totalExposure > 60000) level = 'Moderate Risk';
+    document.getElementById('risk-level').textContent = level;
+  }
+  update();
+</script>
+</body>
+</html>
